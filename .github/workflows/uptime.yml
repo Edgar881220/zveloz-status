@@ -22,6 +22,7 @@ jobs:
             if [ "$code" != "200" ]; then FAILED="${FAILED}${1} → HTTP ${code}\n"; fi
           }
           check "https://zveloz.com/"
+          check "https://api.zveloz.com/api/healthz"
           check "https://api.zveloz.com/api/app/settings"
           printf "%b" "$FAILED" > failed.txt
           if [ -s failed.txt ]; then echo "OUTAGE=true" >> "$GITHUB_ENV"; fi

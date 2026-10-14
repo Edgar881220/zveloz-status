@@ -5,10 +5,15 @@ Corre cada 5 minutos vía GitHub Actions.
 
 ## Endpoints monitoreados
 
-| Servicio | URL |
-|----------|-----|
-| Website | https://zveloz.com/ |
-| Backend/API | https://api.zveloz.com/api/app/settings |
+| Servicio | URL | Qué detecta |
+|----------|-----|-------------|
+| Website | https://zveloz.com/ | Sitio caído, nginx/PHP muerto, Cloudflare issue |
+| Health check | https://api.zveloz.com/api/healthz | DB, Redis, Reverb, cola atascada, disco lleno, storage |
+| API boot | https://api.zveloz.com/api/app/settings | Arranque de las 3 apps Flutter |
+
+`/api/healthz` devuelve 503 con checks individuales cuando algo interno falla
+(`db`, `redis`, `reverb`, `queue`, `disk`, `storage`). Controller:
+`app/Http/Controllers/API/HealthCheckController.php` en el backend.
 
 ## Qué hace al detectar caída
 
