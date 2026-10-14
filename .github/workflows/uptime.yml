@@ -1,0 +1,72 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check endpoints
+        run: |
+          FAILED=""
+          check() {
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -L "$1" || echo 000)
+            echo "$1 -> HTTP $code"
+            if [ "$code" != "200" ]; then FAILED="${FAILED}${1} → HTTP ${code}\n"; fi
+          }
+          check "https://zveloz.com/"
+          check "https://api.zveloz.com/api/app/settings"
+          printf "%b" "$FAILED" > failed.txt
+          if [ -s failed.txt ]; then echo "OUTAGE=true" >> "$GITHUB_ENV"; fi
+
+      - name: Open or update outage issue
+        if: env.OUTAGE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FAILED=$(cat failed.txt)
+          BODY="**Caida detectada** $(date -u '+%Y-%m-%d %H:%M') UTC
+
+          Endpoints fallando:
+
+          \`\`\`
+          $FAILED
+          \`\`\`
+
+          cc @Edgar881220"
+          ISSUE=$(gh issue list --label outage --state open --json number --jq '.[0].number' || true)
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body "$BODY"
+          else
+            gh issue create --title "OUTAGE: ZVELOZ caido" --label outage --body "$BODY"
+          fi
+
+      - name: Send alert email
+        if: env.OUTAGE == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_HOST }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "ZVELOZ: servicio caido ({{github.run_id}})"
+          to: ${{ secrets.ALERT_EMAIL }}
+          from: ${{ secrets.MAIL_FROM }}
+          body: file://failed.txt
+
+      - name: Close outage issue when recovered
+        if: env.OUTAGE != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE=$(gh issue list --label outage --state open --json number --jq '.[0].number' || true)
+          if [ -n "$ISSUE" ]; then
+            gh issue close "$ISSUE" --comment "Recuperado $(date -u '+%Y-%m-%d %H:%M') UTC — todos los endpoints OK."
+          fi
